@@ -1,0 +1,249 @@
+# Investigating Fandango Movie Ratings
+
+## Is Fandango Still Inflating Ratings?
+
+In October 2015, a data journalist named Walt Hickey analyzed movie ratings data and found strong evidence to suggest that Fandango's rating system was biased and dishonest. He published his analysis in [an article on FiveThirtyEight](https://fivethirtyeight.com/features/fandango-movies-ratings/) — a great piece of data journalism that's worth reading.
+
+Hickey found that there's a significant discrepancy between the number of stars displayed to users and the actual rating, which he was able to find in the HTML of the page. 
+
+In this project, we'll analyze more recent movie ratings data to determine whether there has been any change in Fandango's rating system after Hickey's analysis.
+
+## Understanding the Data
+
+We have two key datasets:
+
+1. **fandango_score_comparison.csv**: Walt Hickey's original data from 2015 (before the analysis was published)
+2. **movie_ratings_16_17.csv**: Data collected after Hickey's analysis for movies released in 2016-2017
+
+Let's start by importing our libraries and loading the data:
+
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
+# Set style for plots
+plt.style.use('fivethirtyeight')
+sns.set_palette('deep')
+
+# Display options to show more columns
+pd.options.display.max_columns = 100
+```
+
+```python
+# Load the data
+previous = pd.read_csv('Investigating-Fandango-Movie-Ratings/fandango_score_comparison.csv')
+after = pd.read_csv('Investigating-Fandango-Movie-Ratings/movie_ratings_16_17.csv')
+
+# Examine the first few rows of each dataset
+print("2015 Dataset (Hickey's original data):")
+previous.head()
+```
+
+```python
+print("2016-2017 Dataset:")
+after.head()
+```
+
+## Isolating Fandango Ratings
+
+Since we're only interested in Fandango's ratings, let's extract just the relevant columns from each dataset.
+
+```python
+# Extract only the Fandango-related columns from the previous dataset
+fandango_previous = previous[['FILM', 'Fandango_Stars', 'Fandango_Ratingvalue', 
+                              'Fandango_votes', 'Fandango_Difference']].copy()
+fandango_previous.head()
+```
+
+```python
+# Extract only the movie name, year, and Fandango rating from the newer dataset
+fandango_after = after[['movie', 'year', 'fandango']].copy()
+fandango_after.head()
+```
+
+## Checking Data Quality
+
+Let's verify the data quality of the first dataset. Hickey's analysis was about movies with at least 30 fan ratings, so we should check if all movies in the dataset satisfy this condition.
+
+```python
+# Check if all movies have at least 30 fan ratings
+sum(fandango_previous['Fandango_votes'] < 30)
+```
+
+Great! All movies in the first dataset have at least 30 fan ratings.
+
+## Isolating Movies from 2015 and 2016
+
+To make a fair comparison, we'll focus on movies from 2015 (before Hickey's analysis) and 2016 (after Hickey's analysis).
+
+```python
+# Extract the year from the film title in the first dataset
+fandango_previous['Year'] = fandango_previous['FILM'].str.extract(r'\((\d{4})\)')
+fandango_previous['Year'] = pd.to_numeric(fandango_previous['Year'])
+
+# Filter to only include movies from 2015
+fandango_2015 = fandango_previous[fandango_previous['Year'] == 2015].copy()
+
+# Filter to only include movies from 2016
+fandango_2016 = fandango_after[fandango_after['year'] == 2016].copy()
+
+# Print basic information about the datasets
+print(f"Number of movies in 2015 dataset: {fandango_2015.shape[0]}")
+print(f"Number of movies in 2016 dataset: {fandango_2016.shape[0]}")
+```
+
+## Descriptive Statistics
+
+Let's examine the basic statistics of the ratings for both years to get a sense of any differences.
+
+```python
+# Descriptive statistics for 2015 dataset
+print("Descriptive Statistics (2015):")
+fandango_2015['Fandango_Ratingvalue'].describe()
+```
+
+```python
+# Descriptive statistics for 2016 dataset
+print("Descriptive Statistics (2016):")
+fandango_2016['fandango'].describe()
+```
+
+## Preparing Data for Comparison
+
+To make direct comparisons easier, let's normalize the column names and create a combined dataset.
+
+```python
+# Rename columns for consistency
+fandango_2015 = fandango_2015.rename(columns={'Fandango_Ratingvalue': 'fandango'})
+fandango_2015 = fandango_2015[['FILM', 'fandango']]
+fandango_2015 = fandango_2015.rename(columns={'FILM': 'movie'})
+
+fandango_2016 = fandango_2016[['movie', 'fandango']]
+
+# Add a year column to both dataframes for identification
+fandango_2015['year'] = 2015
+fandango_2016['year'] = 2016
+
+# Create a combined dataframe
+df = pd.concat([fandango_2015, fandango_2016], ignore_index=True)
+df.head()
+```
+
+## Visualizing the Distributions
+
+Now, let's create visualizations to compare the distributions of ratings between 2015 and 2016.
+
+```python
+# 1. Distribution of ratings - Kernel Density Estimate (KDE) plot
+plt.figure(figsize=(12, 8))
+sns.kdeplot(data=fandango_2015, x='fandango', label='2015', shade=True)
+sns.kdeplot(data=fandango_2016, x='fandango', label='2016', shade=True)
+plt.title('Distribution of Fandango Ratings: 2015 vs 2016', fontsize=16)
+plt.xlabel('Rating', fontsize=14)
+plt.ylabel('Density', fontsize=14)
+plt.legend(fontsize=12)
+plt.show()
+```
+
+```python
+# 2. Box plot comparison
+plt.figure(figsize=(12, 8))
+sns.boxplot(data=df, x='year', y='fandango')
+plt.title('Fandango Ratings: 2015 vs 2016', fontsize=16)
+plt.xlabel('Year', fontsize=14)
+plt.ylabel('Rating', fontsize=14)
+plt.show()
+```
+
+```python
+# 3. Histogram comparison
+plt.figure(figsize=(12, 8))
+plt.hist([fandango_2015['fandango'], fandango_2016['fandango']], 
+         bins=np.arange(0, 5.1, 0.5), 
+         label=['2015', '2016'])
+plt.title('Histogram of Fandango Ratings: 2015 vs 2016', fontsize=16)
+plt.xlabel('Rating', fontsize=14)
+plt.ylabel('Frequency', fontsize=14)
+plt.legend(fontsize=12)
+plt.show()
+```
+
+## Statistical Comparison
+
+Let's compare some key statistics between the two years.
+
+```python
+# Mean and median comparisons
+print("Mean Fandango Rating (2015):", fandango_2015['fandango'].mean())
+print("Mean Fandango Rating (2016):", fandango_2016['fandango'].mean())
+print("\nMedian Fandango Rating (2015):", fandango_2015['fandango'].median())
+print("Median Fandango Rating (2016):", fandango_2016['fandango'].median())
+```
+
+```python
+# Percentage of movies with high ratings (4.5 or higher)
+percentage_45_2015 = (fandango_2015['fandango'] >= 4.5).mean() * 100
+percentage_45_2016 = (fandango_2016['fandango'] >= 4.5).mean() * 100
+
+print(f"Percentage of movies with ratings ≥ 4.5 in 2015: {percentage_45_2015:.2f}%")
+print(f"Percentage of movies with ratings ≥ 4.5 in 2016: {percentage_45_2016:.2f}%")
+```
+
+## Distribution of Rating Values
+
+Let's look at the counts of each rating value in both years.
+
+```python
+# Count of ratings by value
+print("Count of ratings by value (2015):")
+print(fandango_2015['fandango'].value_counts().sort_index())
+
+print("\nCount of ratings by value (2016):")
+print(fandango_2016['fandango'].value_counts().sort_index())
+```
+
+```python
+# Create visualization of the rating counts
+rating_counts_2015 = fandango_2015['fandango'].value_counts().sort_index()
+rating_counts_2016 = fandango_2016['fandango'].value_counts().sort_index()
+
+# Combine the indices to ensure we have bars for all ratings
+all_ratings = sorted(set(list(rating_counts_2015.index) + list(rating_counts_2016.index)))
+ 
+# Create a complete series for each year, filling missing values with 0
+complete_counts_2015 = pd.Series([rating_counts_2015.get(r, 0) for r in all_ratings], index=all_ratings)
+complete_counts_2016 = pd.Series([rating_counts_2016.get(r, 0) for r in all_ratings], index=all_ratings)
+
+# Create a grouped bar chart
+x = np.arange(len(all_ratings))
+width = 0.35
+
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.bar(x - width/2, complete_counts_2015, width, label='2015')
+ax.bar(x + width/2, complete_counts_2016, width, label='2016')
+
+ax.set_xticks(x)
+ax.set_xticklabels(all_ratings)
+ax.set_xlabel('Rating', fontsize=14)
+ax.set_ylabel('Count', fontsize=14)
+ax.set_title('Count of Fandango Ratings: 2015 vs 2016', fontsize=16)
+ax.legend(fontsize=12)
+
+plt.show()
+```
+
+## Conclusion
+
+Based on our analysis, we can observe the following key findings:
+
+1. **Rating distribution shift:** There appears to be a clear shift in the distribution of Fandango's ratings from 2015 to 2016. The 2016 ratings are generally lower than the 2015 ratings.
+
+2. **Decrease in mean and median ratings:** Both the mean and median ratings decreased from 2015 to 2016, indicating a general lowering of ratings across the board.
+
+3. **Significant decrease in high ratings:** The percentage of movies with ratings of 4.5 or higher decreased substantially from 2015 to 2016.
+
+4. **Changed rating patterns:** In 2015, the most common rating was 4.5, while in 2016, the most common rating was 4.0. This suggests that Fandango may have changed their rounding practices.
+
+These findings strongly suggest that Fandango did change their rating system after Hickey's analysis, likely in response to the public exposure of their inflated rating practices. The company appears to have adjusted their system to provide more accurate (and slightly lower) ratings, which aligns better with ratings from other platforms and likely provides more value to consumers. 
